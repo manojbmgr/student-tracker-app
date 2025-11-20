@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_activities"
+        android:icon="@android:drawable/ic_menu_view"
+        android:title="Activities" />
+    <item
+        android:id="@+id/nav_timetable"
+        android:icon="@android:drawable/ic_menu_agenda"
+        android:title="Timetable" />
+    <item
+        android:id="@+id/nav_progress"
+        android:icon="@android:drawable/ic_menu_myplaces"
+        android:title="Progress" />
+    <item
+        android:id="@+id/nav_students"
+        android:icon="@android:drawable/ic_menu_myplaces"
+        android:title="Students" />
+</menu>
+
