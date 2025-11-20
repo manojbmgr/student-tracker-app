@@ -4,9 +4,9 @@ import com.bmg.studentactivity.data.api.ApiService
 import com.bmg.studentactivity.data.models.StudentsResponse
 
 class StudentsRepository(private val apiService: ApiService) {
-    suspend fun getStudents(token: String): Result<StudentsResponse> {
+    suspend fun getStudents(): Result<StudentsResponse> {
         return try {
-            val response = apiService.getStudents("Bearer $token")
+            val response = apiService.getStudents()
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {

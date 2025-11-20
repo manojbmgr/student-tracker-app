@@ -11,55 +11,35 @@ interface ApiService {
     @POST("auth/parent-login")
     suspend fun parentLogin(@Body request: LoginRequest): Response<ParentLoginResponse>
     
-    @GET("activities")
-    suspend fun getActivities(
-        @Header("Authorization") token: String,
-        @Query("status") status: String? = null
-    ): Response<ActivitiesResponse>
+    @POST("activities")
+    suspend fun getActivities(@Body request: ActivitiesRequest): Response<ActivitiesResponse>
     
-    @GET("dashboard")
-    suspend fun getParentDashboard(
-        @Header("Authorization") token: String
-    ): Response<ParentDashboardResponse>
+    @POST("dashboard")
+    suspend fun getParentDashboard(@Body request: DashboardRequest): Response<ParentDashboardResponse>
     
     @POST("activities/complete")
-    suspend fun markActivityComplete(
-        @Header("Authorization") token: String,
-        @Body request: CompleteRequest
-    ): Response<CompleteResponse>
+    suspend fun markActivityComplete(@Body request: CompleteRequest): Response<CompleteResponse>
     
     @GET("timetable")
     suspend fun getTimetable(
-        @Header("Authorization") token: String,
         @Query("day") day: String? = null
     ): Response<TimetableResponse>
     
     @POST("timetable")
-    suspend fun createTimetableEntry(
-        @Header("Authorization") token: String,
-        @Body request: TimetableRequest
-    ): Response<TimetableResponse>
+    suspend fun createTimetableEntry(@Body request: TimetableRequest): Response<TimetableResponse>
     
     @PUT("timetable/{id}")
     suspend fun updateTimetableEntry(
-        @Header("Authorization") token: String,
         @Path("id") id: String,
         @Body request: TimetableRequest
     ): Response<TimetableResponse>
     
     @DELETE("timetable/{id}")
-    suspend fun deleteTimetableEntry(
-        @Header("Authorization") token: String,
-        @Path("id") id: String
-    ): Response<TimetableResponse>
+    suspend fun deleteTimetableEntry(@Path("id") id: String): Response<TimetableResponse>
     
-    @GET("progress")
-    suspend fun getProgress(
-        @Header("Authorization") token: String
-    ): Response<ProgressResponse>
+    @POST("progress")
+    suspend fun getProgress(@Body request: ProgressRequest): Response<ProgressResponse>
     
     @GET("students")
-    suspend fun getStudents(
-        @Header("Authorization") token: String
-    ): Response<StudentsResponse>
+    suspend fun getStudents(): Response<StudentsResponse>
 }

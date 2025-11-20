@@ -31,8 +31,12 @@ class LoginViewModel @Inject constructor(
                             val parentData = response.data
                             tokenManager.saveToken(parentData.token)
                             tokenManager.saveUserType(Constants.USER_TYPE_PARENT)
-                            tokenManager.saveParentId(parentData.parentId)
-                            _loginState.value = LoginState.Success(isParent = true, parentId = parentData.parentId)
+                            tokenManager.saveParentId(parentData.parentId.toString())
+                            // Save API key if available
+                            parentData.apiKey?.let { apiKey ->
+                                tokenManager.saveApiKey(apiKey)
+                            }
+                            _loginState.value = LoginState.Success(isParent = true, parentId = parentData.parentId.toString())
                         } else {
                             _loginState.value = LoginState.Error(response.message)
                         }

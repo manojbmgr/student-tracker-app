@@ -17,21 +17,40 @@ data class ParentLoginResponse(
 data class ParentLoginData(
     @SerializedName("token")
     val token: String,
+    @SerializedName("expiresIn")
+    val expiresIn: Int? = null,
+    @SerializedName("apiKey")
+    val apiKey: String? = null,
     @SerializedName("parentId")
-    val parentId: String,
+    val parentId: Int,
     @SerializedName("userName")
     val userName: String,
     @SerializedName("email")
     val email: String,
+    @SerializedName("userType")
+    val userType: String? = "parent",
     @SerializedName("students")
-    val students: List<Student>?
+    val students: List<Student>?,
+    @SerializedName("totalStudents")
+    val totalStudents: Int? = null,
+    @SerializedName("authentication")
+    val authentication: AuthenticationInfo? = null
+)
+
+data class AuthenticationInfo(
+    @SerializedName("jwtToken")
+    val jwtToken: String? = null,
+    @SerializedName("apiKey")
+    val apiKey: String? = null,
+    @SerializedName("note")
+    val note: String? = null
 )
 
 data class Student(
     @SerializedName("studentId", alternate = ["id"])
-    val studentId: String,
+    val studentId: Int,
     @SerializedName("studentName", alternate = ["name"])
     val studentName: String,
-    @SerializedName("class", alternate = ["className", "email"])
-    val className: String
+    @SerializedName("class", alternate = ["className"])
+    val className: Int? = null
 )

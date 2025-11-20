@@ -1,5 +1,6 @@
 package com.bmg.studentactivity.data.api
 
+import com.bmg.studentactivity.data.api.interceptors.AuthInterceptor
 import com.bmg.studentactivity.utils.Constants
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -8,23 +9,44 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+    private var tokenProvider: (() -> String?)? = null
+    private var apiKeyProvider: (() -> String?)? = null
+    private var retrofitInstance: Retrofit? = null
+    
+    fun initialize(tokenProvider: () -> String?, apiKeyProvider: () -> String?) {
+        this.tokenProvider = tokenProvider
+        this.apiKeyProvider = apiKeyProvider
+        
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
+        
+        val authInterceptor = AuthInterceptor(
+            tokenProvider = tokenProvider,
+            apiKeyProvider = apiKeyProvider
+        )
+        
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+        
+        retrofitInstance = Retrofit.Builder()
+            .baseUrl(Constants.BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
     }
     
-    private val okHttpClient = OkHttpClient.Builder()
-        .addInterceptor(loggingInterceptor)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
-    
-    private val retrofit = Retrofit.Builder()
-        .baseUrl(Constants.BASE_URL)
-        .client(okHttpClient)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-    
-    val apiService: ApiService = retrofit.create(ApiService::class.java)
+    val apiService: ApiService
+        get() {
+            if (retrofitInstance == null) {
+                throw IllegalStateException("ApiClient not initialized. Call initialize() first.")
+            }
+            return retrofitInstance!!.create(ApiService::class.java)
+        }
 }
 

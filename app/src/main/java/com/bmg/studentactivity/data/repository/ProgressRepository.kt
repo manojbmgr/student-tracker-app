@@ -1,12 +1,14 @@
 package com.bmg.studentactivity.data.repository
 
 import com.bmg.studentactivity.data.api.ApiService
+import com.bmg.studentactivity.data.models.ProgressRequest
 import com.bmg.studentactivity.data.models.ProgressResponse
 
 class ProgressRepository(private val apiService: ApiService) {
-    suspend fun getProgress(token: String): Result<ProgressResponse> {
+    suspend fun getProgress(studentEmail: String? = null): Result<ProgressResponse> {
         return try {
-            val response = apiService.getProgress("Bearer $token")
+            val request = ProgressRequest(studentEmail)
+            val response = apiService.getProgress(request)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {

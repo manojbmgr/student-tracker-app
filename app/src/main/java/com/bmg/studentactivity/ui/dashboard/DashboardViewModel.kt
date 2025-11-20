@@ -27,15 +27,14 @@ class DashboardViewModel @Inject constructor(
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
     
-    fun loadTodayActivities() {
+    fun loadTodayActivities(studentEmail: String? = null, day: String? = null) {
         viewModelScope.launch {
             _loading.value = true
-            val token = tokenManager.getToken()
             val userType = tokenManager.getUserType()
             
-            if (token != null) {
+            try {
                 if (userType == Constants.USER_TYPE_PARENT) {
-                    val result = activityRepository.getParentDashboard(token)
+                    val result = activityRepository.getParentDashboard(studentEmail, day)
                     result.onSuccess { response ->
                         if (response.success && response.data != null) {
                             // Flatten activities from all students
@@ -54,7 +53,7 @@ class DashboardViewModel @Inject constructor(
                     }
                 } else {
                     // Student logic
-                    val result = activityRepository.getActivities(token)
+                    val result = activityRepository.getActivities(studentEmail, day)
                     result.onSuccess { response ->
                         if (response.success && response.data != null) {
                             _activities.value = response.data
@@ -65,8 +64,8 @@ class DashboardViewModel @Inject constructor(
                         _error.value = exception.message
                     }
                 }
-            } else {
-                _error.value = "Not authenticated"
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Not authenticated"
             }
             _loading.value = false
         }
@@ -74,9 +73,8 @@ class DashboardViewModel @Inject constructor(
 
     fun markActivityComplete(activity: Activity) {
         viewModelScope.launch {
-            val token = tokenManager.getToken()
-            if (token != null) {
-                val result = activityRepository.markActivityComplete(token, activity.id)
+            try {
+                val result = activityRepository.markActivityComplete(activity.id)
                 result.onSuccess { response ->
                     if (response.success) {
                         loadTodayActivities() // Reload to update list
@@ -86,6 +84,8 @@ class DashboardViewModel @Inject constructor(
                 }.onFailure { exception ->
                     _error.value = exception.message
                 }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Failed to mark activity complete"
             }
         }
     }

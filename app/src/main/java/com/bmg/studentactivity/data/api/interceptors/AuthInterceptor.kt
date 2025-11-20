@@ -4,20 +4,25 @@ import com.bmg.studentactivity.utils.Constants
 import okhttp3.Interceptor
 import okhttp3.Response
 
-class AuthInterceptor(private val tokenProvider: () -> String?) : Interceptor {
+class AuthInterceptor(
+    private val tokenProvider: () -> String?,
+    private val apiKeyProvider: () -> String?
+) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
         val token = tokenProvider()
+        val apiKey = apiKeyProvider()
         
-        val newRequest = if (token != null) {
-            originalRequest.newBuilder()
-                .header("Authorization", "Bearer $token")
-                .build()
-        } else {
-            originalRequest
+        val requestBuilder = originalRequest.newBuilder()
+        
+        // Prefer JWT token over API key
+        if (token != null) {
+            requestBuilder.header("Authorization", "Bearer $token")
+        } else if (apiKey != null) {
+            requestBuilder.header("X-API-Key", apiKey)
         }
         
-        return chain.proceed(newRequest)
+        return chain.proceed(requestBuilder.build())
     }
 }
 

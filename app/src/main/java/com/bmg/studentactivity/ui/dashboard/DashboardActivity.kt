@@ -84,23 +84,43 @@ class DashboardActivity : AppCompatActivity(), NavigationView.OnNavigationItemSe
     
     private fun observeViewModel() {
         viewModel.activities.observe(this) { activities ->
-            adapter.submitList(activities)
-            if (activities.isEmpty()) {
-                binding.tvNoData.visibility = View.VISIBLE
-                binding.recyclerViewActivities.visibility = View.GONE
-            } else {
-                binding.tvNoData.visibility = View.GONE
-                binding.recyclerViewActivities.visibility = View.VISIBLE
+            if (!isFinishing) {
+                try {
+                    adapter.submitList(activities) {
+                        // Update visibility after list is submitted
+                        if (!isFinishing) {
+                            if (activities.isEmpty()) {
+                                binding.tvNoData.visibility = View.VISIBLE
+                                binding.recyclerViewActivities.visibility = View.GONE
+                            } else {
+                                binding.tvNoData.visibility = View.GONE
+                                binding.recyclerViewActivities.visibility = View.VISIBLE
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Ignore if activity is finishing
+                }
             }
         }
         
         viewModel.loading.observe(this) { isLoading ->
-             binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+            if (!isFinishing) {
+                try {
+                    binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+                } catch (e: Exception) {
+                    // Ignore if activity is finishing
+                }
+            }
         }
         
         viewModel.error.observe(this) { errorMessage ->
-            if (errorMessage != null) {
-                Toast.makeText(this, errorMessage, Toast.LENGTH_SHORT).show()
+            if (errorMessage != null && !isFinishing) {
+                try {
+                    Toast.makeText(this, errorMessage, Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    // Ignore if activity is finishing
+                }
             }
         }
     }
@@ -133,12 +153,21 @@ class DashboardActivity : AppCompatActivity(), NavigationView.OnNavigationItemSe
         return true
     }
 
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
             binding.drawerLayout.closeDrawer(GravityCompat.START)
         } else {
             super.onBackPressed()
         }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Clear any pending view updates to prevent buffer queue errors
+        viewModel.error.removeObservers(this)
+        viewModel.loading.removeObservers(this)
+        viewModel.activities.removeObservers(this)
     }
     
     private fun loadData() {

@@ -2,6 +2,7 @@ package com.bmg.studentactivity.di
 
 import com.bmg.studentactivity.data.api.ApiClient
 import com.bmg.studentactivity.data.api.ApiService
+import com.bmg.studentactivity.utils.TokenManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -13,7 +14,11 @@ import javax.inject.Singleton
 object NetworkModule {
     @Provides
     @Singleton
-    fun provideApiService(): ApiService {
+    fun provideApiService(tokenManager: TokenManager): ApiService {
+        ApiClient.initialize(
+            tokenProvider = { tokenManager.getToken() },
+            apiKeyProvider = { tokenManager.getApiKey() }
+        )
         return ApiClient.apiService
     }
 }

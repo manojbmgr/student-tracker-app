@@ -6,15 +6,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bmg.studentactivity.data.models.TimetableEntry
 import com.bmg.studentactivity.data.repository.TimetableRepository
-import com.bmg.studentactivity.utils.TokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class TimetableViewModel @Inject constructor(
-    private val timetableRepository: TimetableRepository,
-    private val tokenManager: TokenManager
+    private val timetableRepository: TimetableRepository
 ) : ViewModel() {
     
     private val _timetableEntries = MutableLiveData<List<TimetableEntry>>()
@@ -29,9 +27,8 @@ class TimetableViewModel @Inject constructor(
     fun loadTimetable(day: String? = null) {
         viewModelScope.launch {
             _loading.value = true
-            val token = tokenManager.getToken()
-            if (token != null) {
-                val result = timetableRepository.getTimetable(token, day)
+            try {
+                val result = timetableRepository.getTimetable(day)
                 result.onSuccess { response ->
                     if (response.success && response.data != null) {
                         _timetableEntries.value = response.data
@@ -41,8 +38,8 @@ class TimetableViewModel @Inject constructor(
                 }.onFailure { exception ->
                     _error.value = exception.message
                 }
-            } else {
-                _error.value = "Not authenticated"
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Not authenticated"
             }
             _loading.value = false
         }
@@ -50,9 +47,8 @@ class TimetableViewModel @Inject constructor(
     
     fun createEntry(day: String, time: String, subject: String, description: String?, audioUrl: String?) {
         viewModelScope.launch {
-            val token = tokenManager.getToken()
-            if (token != null) {
-                val result = timetableRepository.createTimetableEntry(token, day, time, subject, description, audioUrl)
+            try {
+                val result = timetableRepository.createTimetableEntry(day, time, subject, description, audioUrl)
                 result.onSuccess { response ->
                     if (response.success) {
                         loadTimetable()
@@ -62,15 +58,16 @@ class TimetableViewModel @Inject constructor(
                 }.onFailure { exception ->
                     _error.value = exception.message
                 }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Failed to create timetable entry"
             }
         }
     }
     
     fun updateEntry(id: String, day: String, time: String, subject: String, description: String?, audioUrl: String?) {
         viewModelScope.launch {
-            val token = tokenManager.getToken()
-            if (token != null) {
-                val result = timetableRepository.updateTimetableEntry(token, id, day, time, subject, description, audioUrl)
+            try {
+                val result = timetableRepository.updateTimetableEntry(id, day, time, subject, description, audioUrl)
                 result.onSuccess { response ->
                     if (response.success) {
                         loadTimetable()
@@ -80,15 +77,16 @@ class TimetableViewModel @Inject constructor(
                 }.onFailure { exception ->
                     _error.value = exception.message
                 }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Failed to update timetable entry"
             }
         }
     }
     
     fun deleteEntry(id: String) {
         viewModelScope.launch {
-            val token = tokenManager.getToken()
-            if (token != null) {
-                val result = timetableRepository.deleteTimetableEntry(token, id)
+            try {
+                val result = timetableRepository.deleteTimetableEntry(id)
                 result.onSuccess { response ->
                     if (response.success) {
                         loadTimetable()
@@ -98,6 +96,8 @@ class TimetableViewModel @Inject constructor(
                 }.onFailure { exception ->
                     _error.value = exception.message
                 }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Failed to delete timetable entry"
             }
         }
     }

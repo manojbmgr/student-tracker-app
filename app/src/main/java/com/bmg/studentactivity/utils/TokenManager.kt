@@ -15,6 +15,16 @@ class TokenManager(context: Context) {
         prefs.edit().remove(Constants.KEY_TOKEN).apply()
     }
     
+    fun saveApiKey(apiKey: String) {
+        prefs.edit().putString(Constants.KEY_API_KEY, apiKey).apply()
+    }
+    
+    fun getApiKey(): String? = prefs.getString(Constants.KEY_API_KEY, null)
+    
+    fun clearApiKey() {
+        prefs.edit().remove(Constants.KEY_API_KEY).apply()
+    }
+    
     fun saveUserType(userType: String) {
         prefs.edit().putString(Constants.KEY_USER_TYPE, userType).apply()
     }

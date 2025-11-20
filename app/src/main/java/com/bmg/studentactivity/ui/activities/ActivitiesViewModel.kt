@@ -26,12 +26,15 @@ class ActivitiesViewModel @Inject constructor(
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
     
-    fun loadActivities(status: String? = null) {
+    fun loadActivities(
+        studentEmail: String? = null,
+        day: String? = null,
+        status: String? = null
+    ) {
         viewModelScope.launch {
             _loading.value = true
-            val token = tokenManager.getToken()
-            if (token != null) {
-                val result = activityRepository.getActivities(token, status)
+            try {
+                val result = activityRepository.getActivities(studentEmail, day, status)
                 result.onSuccess { response ->
                     if (response.success && response.data != null) {
                         _activities.value = response.data
@@ -41,8 +44,8 @@ class ActivitiesViewModel @Inject constructor(
                 }.onFailure { exception ->
                     _error.value = exception.message
                 }
-            } else {
-                _error.value = "Not authenticated"
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Not authenticated"
             }
             _loading.value = false
         }
@@ -50,9 +53,8 @@ class ActivitiesViewModel @Inject constructor(
     
     fun markActivityComplete(activityId: String) {
         viewModelScope.launch {
-            val token = tokenManager.getToken()
-            if (token != null) {
-                val result = activityRepository.markActivityComplete(token, activityId)
+            try {
+                val result = activityRepository.markActivityComplete(activityId)
                 result.onSuccess { response ->
                     if (response.success) {
                         loadActivities() // Reload activities
@@ -62,6 +64,8 @@ class ActivitiesViewModel @Inject constructor(
                 }.onFailure { exception ->
                     _error.value = exception.message
                 }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Failed to mark activity complete"
             }
         }
     }

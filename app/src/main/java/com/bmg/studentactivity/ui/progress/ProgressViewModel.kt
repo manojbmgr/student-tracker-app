@@ -26,12 +26,11 @@ class ProgressViewModel @Inject constructor(
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
     
-    fun loadProgress() {
+    fun loadProgress(studentEmail: String? = null) {
         viewModelScope.launch {
             _loading.value = true
-            val token = tokenManager.getToken()
-            if (token != null) {
-                val result = progressRepository.getProgress(token)
+            try {
+                val result = progressRepository.getProgress(studentEmail)
                 result.onSuccess { response ->
                     if (response.success && response.data != null) {
                         _progressData.value = response.data
@@ -41,8 +40,8 @@ class ProgressViewModel @Inject constructor(
                 }.onFailure { exception ->
                     _error.value = exception.message
                 }
-            } else {
-                _error.value = "Not authenticated"
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Not authenticated"
             }
             _loading.value = false
         }

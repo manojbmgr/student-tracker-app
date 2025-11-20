@@ -29,20 +29,19 @@ class StudentsViewModel @Inject constructor(
     fun loadStudents() {
         viewModelScope.launch {
             _loading.value = true
-            val token = tokenManager.getToken()
-            if (token != null) {
-                val result = studentsRepository.getStudents(token)
+            try {
+                val result = studentsRepository.getStudents()
                 result.onSuccess { response ->
                     if (response.success && response.data != null) {
-                        _students.value = response.data
+                        _students.value = response.data.students ?: emptyList()
                     } else {
                         _error.value = response.message
                     }
                 }.onFailure { exception ->
                     _error.value = exception.message
                 }
-            } else {
-                _error.value = "Not authenticated"
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Not authenticated"
             }
             _loading.value = false
         }
