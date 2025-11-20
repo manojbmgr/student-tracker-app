@@ -9,6 +9,10 @@
             android:icon="@android:drawable/ic_menu_view"
             android:title="Dashboard" />
         <item
+            android:id="@+id/nav_activities"
+            android:icon="@android:drawable/ic_menu_view"
+            android:title="Activities" />
+        <item
             android:id="@+id/nav_timetable"
             android:icon="@android:drawable/ic_menu_agenda"
             android:title="Timetable" />

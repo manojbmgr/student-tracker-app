@@ -131,6 +131,9 @@ class DashboardActivity : AppCompatActivity(), NavigationView.OnNavigationItemSe
                  // Already on dashboard, reload data
                  loadData()
             }
+            R.id.nav_activities -> {
+                startActivity(Intent(this, ActivitiesActivity::class.java))
+            }
             R.id.nav_timetable -> {
                 startActivity(Intent(this, TimetableActivity::class.java))
             }
@@ -171,6 +174,10 @@ class DashboardActivity : AppCompatActivity(), NavigationView.OnNavigationItemSe
     }
     
     private fun loadData() {
+        android.util.Log.d("DashboardActivity", "loadData() called")
+        val token = tokenManager.getToken()
+        val userType = tokenManager.getUserType()
+        android.util.Log.d("DashboardActivity", "Token exists: ${token != null}, UserType: $userType")
         viewModel.loadTodayActivities()
     }
     

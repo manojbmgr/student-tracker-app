@@ -30,12 +30,31 @@ class DashboardViewModel @Inject constructor(
     fun loadTodayActivities(studentEmail: String? = null, day: String? = null) {
         viewModelScope.launch {
             _loading.value = true
+            _error.value = null // Clear previous errors
+            
             val userType = tokenManager.getUserType()
+            val token = tokenManager.getToken()
+            
+            // Check if we have authentication
+            if (token == null) {
+                _error.value = "Not authenticated. Please login again."
+                _loading.value = false
+                return@launch
+            }
+            
+            if (userType == null) {
+                _error.value = "User type not set. Please login again."
+                _loading.value = false
+                return@launch
+            }
             
             try {
                 if (userType == Constants.USER_TYPE_PARENT) {
+                    // Parent dashboard API call
+                    android.util.Log.d("DashboardViewModel", "Loading dashboard for parent, userType=$userType, token exists=${token != null}")
                     val result = activityRepository.getParentDashboard(studentEmail, day)
                     result.onSuccess { response ->
+                        android.util.Log.d("DashboardViewModel", "Dashboard API call successful")
                         if (response.success && response.data != null) {
                             // Flatten activities from all students
                             val allActivities = mutableListOf<Activity>()
@@ -45,14 +64,18 @@ class DashboardViewModel @Inject constructor(
                                 }
                             }
                             _activities.value = allActivities
+                            // If no activities, set empty list (not null)
+                            if (allActivities.isEmpty()) {
+                                _activities.value = emptyList()
+                            }
                         } else {
-                            _error.value = "Failed to load dashboard" 
+                            _error.value = response.message ?: "Failed to load dashboard"
                         }
                     }.onFailure { exception ->
-                        _error.value = exception.message
+                        _error.value = exception.message ?: "Failed to load dashboard"
                     }
                 } else {
-                    // Student logic
+                    // Student activities API call
                     val result = activityRepository.getActivities(studentEmail, day)
                     result.onSuccess { response ->
                         if (response.success && response.data != null) {
@@ -61,13 +84,14 @@ class DashboardViewModel @Inject constructor(
                             _error.value = response.message
                         }
                     }.onFailure { exception ->
-                        _error.value = exception.message
+                        _error.value = exception.message ?: "Failed to load activities"
                     }
                 }
             } catch (e: Exception) {
-                _error.value = e.message ?: "Not authenticated"
+                _error.value = e.message ?: "An error occurred while loading data"
+            } finally {
+                _loading.value = false
             }
-            _loading.value = false
         }
     }
 

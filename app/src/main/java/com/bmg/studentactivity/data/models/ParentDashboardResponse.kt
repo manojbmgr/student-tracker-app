@@ -5,6 +5,8 @@ import com.google.gson.annotations.SerializedName
 data class ParentDashboardResponse(
     @SerializedName("status")
     val status: String,
+    @SerializedName("message")
+    val message: String? = null,
     @SerializedName("data")
     val data: ParentDashboardData?
 ) {

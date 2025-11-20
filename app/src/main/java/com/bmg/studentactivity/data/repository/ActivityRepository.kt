@@ -38,15 +38,32 @@ class ActivityRepository(private val apiService: ApiService) {
                 studentEmail = studentEmail,
                 day = day
             )
+            
+            // Log the request for debugging
+            android.util.Log.d("ActivityRepository", "Calling dashboard API with request: studentEmail=$studentEmail, day=$day")
+            
             val response = apiService.getParentDashboard(request)
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            
+            android.util.Log.d("ActivityRepository", "Dashboard API response: code=${response.code()}, isSuccessful=${response.isSuccessful}")
+            
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null) {
+                    android.util.Log.d("ActivityRepository", "Dashboard response body received, students count: ${body.data?.students?.size ?: 0}")
+                    Result.success(body)
+                } else {
+                    android.util.Log.e("ActivityRepository", "Dashboard response body is null")
+                    Result.failure(Exception("Dashboard response body is null"))
+                }
             } else {
                 val errorBody = response.errorBody()?.string()
-                Result.failure(Exception(errorBody ?: response.message() ?: "Failed to fetch dashboard"))
+                val errorMessage = errorBody ?: "HTTP ${response.code()}: ${response.message()}"
+                android.util.Log.e("ActivityRepository", "Dashboard API error: $errorMessage")
+                Result.failure(Exception(errorMessage))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            android.util.Log.e("ActivityRepository", "Dashboard API exception: ${e.message}", e)
+            Result.failure(Exception("Network error: ${e.message}", e))
         }
     }
     
