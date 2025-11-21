@@ -43,12 +43,20 @@ class SettingsActivity : AppCompatActivity() {
         val apiKey = binding.editTextApiKey.text.toString().trim()
         
         if (apiKey.isEmpty()) {
-            binding.editTextApiKey.error = "API Key cannot be empty"
+            binding.textInputLayoutApiKey.error = "API Key cannot be empty"
             return
         }
         
+        binding.textInputLayoutApiKey.error = null
         tokenManager.saveApiKey(apiKey)
         Toast.makeText(this, "API Key saved successfully", Toast.LENGTH_SHORT).show()
+        
+        // Navigate to ActivitiesActivity after saving
+        android.content.Intent(this, com.bmg.studentactivity.ui.activities.ActivitiesActivity::class.java).also {
+            it.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(it)
+            finish()
+        }
     }
     
     private fun clearApiKey() {

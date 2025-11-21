@@ -57,6 +57,7 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.swiperefreshlayout)
     
     // ViewModel & LiveData
     implementation(libs.androidx.lifecycle.viewmodel.ktx)

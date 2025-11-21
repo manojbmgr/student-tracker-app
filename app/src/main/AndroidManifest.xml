@@ -28,37 +28,17 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".ui.auth.LoginActivity"
-            android:exported="false"
-            android:theme="@style/Theme.StudentActivity" />
-        <activity
-            android:name=".ui.dashboard.DashboardActivity"
-            android:exported="false"
-            android:theme="@style/Theme.StudentActivity" />
-        <activity
             android:name=".ui.activities.ActivitiesActivity"
             android:exported="false"
-            android:parentActivityName=".ui.dashboard.DashboardActivity"
             android:theme="@style/Theme.StudentActivity" />
         <activity
-            android:name=".ui.timetable.TimetableActivity"
+            android:name=".ui.activities.StudentActivitiesDetailActivity"
             android:exported="false"
-            android:parentActivityName=".ui.dashboard.DashboardActivity"
-            android:theme="@style/Theme.StudentActivity" />
-        <activity
-            android:name=".ui.progress.ProgressActivity"
-            android:exported="false"
-            android:parentActivityName=".ui.dashboard.DashboardActivity"
-            android:theme="@style/Theme.StudentActivity" />
-        <activity
-            android:name=".ui.students.StudentsActivity"
-            android:exported="false"
-            android:parentActivityName=".ui.dashboard.DashboardActivity"
+            android:parentActivityName=".ui.activities.ActivitiesActivity"
             android:theme="@style/Theme.StudentActivity" />
         <activity
             android:name=".ui.settings.SettingsActivity"
             android:exported="false"
-            android:parentActivityName=".ui.dashboard.DashboardActivity"
             android:theme="@style/Theme.StudentActivity" />
     </application>
 

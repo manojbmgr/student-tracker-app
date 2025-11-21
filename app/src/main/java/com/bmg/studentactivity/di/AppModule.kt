@@ -1,7 +1,6 @@
 package com.bmg.studentactivity.di
 
 import android.content.Context
-import com.bmg.studentactivity.data.local.database.AppDatabase
 import com.bmg.studentactivity.utils.TokenManager
 import dagger.Module
 import dagger.Provides
@@ -17,12 +16,6 @@ object AppModule {
     @Singleton
     fun provideTokenManager(@ApplicationContext context: Context): TokenManager {
         return TokenManager(context)
-    }
-    
-    @Provides
-    @Singleton
-    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
-        return AppDatabase.getDatabase(context)
     }
 }
 

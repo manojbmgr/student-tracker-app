@@ -7,19 +7,20 @@ import androidx.lifecycle.viewModelScope
 import com.bmg.studentactivity.data.models.ActivitiesData
 import com.bmg.studentactivity.data.models.StudentActivities
 import com.bmg.studentactivity.data.repository.ActivityRepository
-import com.bmg.studentactivity.utils.TokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class ActivitiesViewModel @Inject constructor(
-    private val activityRepository: ActivityRepository,
-    private val tokenManager: TokenManager
+    private val activityRepository: ActivityRepository
 ) : ViewModel() {
     
     private val _studentsData = MutableLiveData<List<StudentActivities>>()
     val studentsData: LiveData<List<StudentActivities>> = _studentsData
+    
+    private val _filteredStudentsData = MutableLiveData<List<StudentActivities>>()
+    val filteredStudentsData: LiveData<List<StudentActivities>> = _filteredStudentsData
     
     private val _activitiesData = MutableLiveData<ActivitiesData?>()
     val activitiesData: LiveData<ActivitiesData?> = _activitiesData
@@ -30,6 +31,12 @@ class ActivitiesViewModel @Inject constructor(
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
     
+    private var currentFilter: ActivityFilter = ActivityFilter.ALL
+    
+    enum class ActivityFilter {
+        ALL, COMPLETED, PENDING, OVERDUE
+    }
+    
     fun loadActivities(
         studentEmail: String? = null,
         day: String? = null,
@@ -39,14 +46,20 @@ class ActivitiesViewModel @Inject constructor(
             _loading.value = true
             _error.value = null
             try {
+                android.util.Log.d("ActivitiesViewModel", "loadActivities called: studentEmail=$studentEmail, day=$day, status=$status")
                 val result = activityRepository.getActivities(studentEmail, day, status)
+                android.util.Log.d("ActivitiesViewModel", "Repository call completed, result: ${result.isSuccess}")
                 result.onSuccess { response ->
+                    android.util.Log.d("ActivitiesViewModel", "Response success: ${response.success}, data: ${response.data != null}")
                     if (response.success && response.data != null) {
                         _activitiesData.value = response.data
                         // If students array exists, use it; otherwise use activities list
                         if (response.data.students != null && response.data.students.isNotEmpty()) {
+                            android.util.Log.d("ActivitiesViewModel", "Found ${response.data.students.size} students")
                             _studentsData.value = response.data.students
+                            applyFilter(currentFilter)
                         } else if (response.data.activities != null) {
+                            android.util.Log.d("ActivitiesViewModel", "Found ${response.data.activities.size} activities")
                             // Convert activities list to student activities format
                             val studentActivities = StudentActivities(
                                 studentEmail = "",
@@ -55,40 +68,102 @@ class ActivitiesViewModel @Inject constructor(
                                 statistics = response.data.statistics ?: com.bmg.studentactivity.data.models.ActivityStatistics()
                             )
                             _studentsData.value = listOf(studentActivities)
+                            applyFilter(currentFilter)
+                        } else {
+                            android.util.Log.d("ActivitiesViewModel", "No students or activities found in response")
+                            _studentsData.value = emptyList()
+                            _filteredStudentsData.value = emptyList()
                         }
                     } else {
-                        _error.value = response.message ?: "Failed to load activities"
+                        val errorMsg = response.message ?: "Failed to load activities"
+                        android.util.Log.e("ActivitiesViewModel", "Response not successful: $errorMsg")
+                        _error.value = errorMsg
                     }
                 }.onFailure { exception ->
-                    _error.value = exception.message ?: "Failed to load activities"
+                    val errorMsg = exception.message ?: "Failed to load activities"
+                    android.util.Log.e("ActivitiesViewModel", "Repository call failed: $errorMsg", exception)
+                    _error.value = errorMsg
                 }
             } catch (e: Exception) {
-                _error.value = e.message ?: "Not authenticated"
+                val errorMsg = e.message ?: "Not authenticated"
+                android.util.Log.e("ActivitiesViewModel", "Exception in loadActivities: $errorMsg", e)
+                _error.value = errorMsg
+            } finally {
+                _loading.value = false
             }
-            _loading.value = false
         }
     }
     
-    fun markActivityComplete(activityId: String) {
-        viewModelScope.launch {
-            _loading.value = true
-            _error.value = null
-            try {
-                val result = activityRepository.markActivityComplete(activityId)
-                result.onSuccess { response ->
-                    if (response.success) {
-                        loadActivities() // Reload activities
-                    } else {
-                        _error.value = response.message ?: "Failed to mark activity complete"
-                    }
-                }.onFailure { exception ->
-                    _error.value = exception.message ?: "Failed to mark activity complete"
-                }
-            } catch (e: Exception) {
-                _error.value = e.message ?: "Failed to mark activity complete"
-            }
-            _loading.value = false
-        }
+    fun filterActivities(filter: ActivityFilter) {
+        currentFilter = filter
+        applyFilter(filter)
     }
+    
+    fun refreshActivities() {
+        // Reload activities with current filter parameters
+        loadActivities()
+    }
+    
+    private fun applyFilter(filter: ActivityFilter) {
+        val allStudents = _studentsData.value ?: emptyList()
+        
+        val filtered = when (filter) {
+            ActivityFilter.ALL -> allStudents.map { student ->
+                student.copy(
+                    activities = student.activities,
+                    statistics = calculateStatistics(student.activities)
+                )
+            }
+            
+            ActivityFilter.COMPLETED -> allStudents.map { student ->
+                val completedActivities = student.activities.filter { 
+                    it.isCompleted == true || it.isCompletedToday == true 
+                }
+                student.copy(
+                    activities = completedActivities,
+                    statistics = calculateStatistics(completedActivities)
+                )
+            }
+            
+            ActivityFilter.PENDING -> allStudents.map { student ->
+                val pendingActivities = student.activities.filter { 
+                    (it.isCompleted != true && it.isCompletedToday != true) && (it.isOverdue != true)
+                }
+                student.copy(
+                    activities = pendingActivities,
+                    statistics = calculateStatistics(pendingActivities)
+                )
+            }
+            
+            ActivityFilter.OVERDUE -> allStudents.map { student ->
+                val overdueActivities = student.activities.filter { 
+                    it.isOverdue == true 
+                }
+                student.copy(
+                    activities = overdueActivities,
+                    statistics = calculateStatistics(overdueActivities)
+                )
+            }
+        }
+        
+        _filteredStudentsData.value = filtered
+    }
+    
+    private fun calculateStatistics(activities: List<com.bmg.studentactivity.data.models.Activity>): com.bmg.studentactivity.data.models.ActivityStatistics {
+        val total = activities.size
+        val completed = activities.count { it.isCompleted == true || it.isCompletedToday == true }
+        val pending = activities.count { (it.isCompleted != true && it.isCompletedToday != true) && (it.isOverdue != true) }
+        val overdue = activities.count { it.isOverdue == true }
+        val completionPercentage = if (total > 0) (completed.toDouble() / total * 100) else 0.0
+        
+        return com.bmg.studentactivity.data.models.ActivityStatistics(
+            total = total,
+            completed = completed,
+            pending = pending,
+            overdue = overdue,
+            completionPercentage = completionPercentage
+        )
+    }
+    
 }
 

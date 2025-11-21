@@ -5,13 +5,14 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.bmg.studentactivity.data.models.Activity
 import com.bmg.studentactivity.data.models.StudentActivities
-import com.bmg.studentactivity.databinding.ItemActivityBinding
 import com.bmg.studentactivity.databinding.ItemStudentActivitiesBinding
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.bitmap.CircleCrop
+import com.bumptech.glide.request.RequestOptions
 
 class StudentActivitiesAdapter(
-    private val onCompleteClick: (Activity) -> Unit
+    private val onStudentClick: (StudentActivities) -> Unit
 ) : ListAdapter<StudentActivities, StudentActivitiesAdapter.ViewHolder>(DiffCallback()) {
     
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -20,7 +21,7 @@ class StudentActivitiesAdapter(
             parent,
             false
         )
-        return ViewHolder(binding, onCompleteClick)
+        return ViewHolder(binding, onStudentClick)
     }
     
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
@@ -29,18 +30,34 @@ class StudentActivitiesAdapter(
     
     inner class ViewHolder(
         private val binding: ItemStudentActivitiesBinding,
-        private val onCompleteClick: (Activity) -> Unit
+        private val onStudentClick: (StudentActivities) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
         
-        private val activitiesAdapter = ActivitiesAdapter(onCompleteClick)
-        
         init {
-            binding.recyclerViewActivities.adapter = activitiesAdapter
+            // Make the entire card clickable
+            binding.root.setOnClickListener {
+                val student = getItem(adapterPosition)
+                onStudentClick(student)
+            }
         }
         
         fun bind(studentActivities: StudentActivities) {
             binding.tvStudentName.text = studentActivities.studentName ?: studentActivities.studentEmail
             binding.tvStudentEmail.text = studentActivities.studentEmail
+            
+            // Load profile image
+            val imageUrl = studentActivities.profileImgUrl
+            if (!imageUrl.isNullOrEmpty()) {
+                Glide.with(binding.root.context)
+                    .load(imageUrl)
+                    .apply(RequestOptions.bitmapTransform(CircleCrop()))
+                    .placeholder(android.R.drawable.ic_menu_gallery)
+                    .error(android.R.drawable.ic_menu_gallery)
+                    .into(binding.imgProfile)
+            } else {
+                // Set default placeholder if no image URL
+                binding.imgProfile.setImageResource(android.R.drawable.ic_menu_gallery)
+            }
             
             // Display statistics
             val stats = studentActivities.statistics
@@ -49,9 +66,6 @@ class StudentActivitiesAdapter(
             binding.tvPending.text = "Pending: ${stats.pending}"
             binding.tvOverdue.text = "Overdue: ${stats.overdue}"
             binding.tvCompletionPercentage.text = "Completion: ${stats.completionPercentage}%"
-            
-            // Set activities
-            activitiesAdapter.submitList(studentActivities.activities)
         }
     }
     

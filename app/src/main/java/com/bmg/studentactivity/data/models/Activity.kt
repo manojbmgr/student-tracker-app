@@ -38,6 +38,10 @@ data class StudentActivities(
     val studentEmail: String,
     @SerializedName("studentName")
     val studentName: String? = null,
+    @SerializedName("profileImg")
+    val profileImg: String? = null,
+    @SerializedName("profileImgUrl")
+    val profileImgUrl: String? = null,
     @SerializedName("activities")
     val activities: List<Activity>,
     @SerializedName("statistics")
@@ -58,13 +62,13 @@ data class ActivityStatistics(
 )
 
 data class Activity(
-    @SerializedName("id", alternate = ["timetableId", "activityId"])
+    @SerializedName("id")
     val id: String? = null,
     @SerializedName("timetableId")
     val timetableId: Int? = null,
     @SerializedName("activityId")
     val activityId: Int? = null,
-    @SerializedName("title", alternate = ["activityName", "subject"])
+    @SerializedName("title")
     val title: String? = null,
     @SerializedName("activityName")
     val activityName: String? = null,
@@ -72,13 +76,13 @@ data class Activity(
     val subject: String? = null,
     @SerializedName("activityType")
     val activityType: String? = null,
-    @SerializedName("description", alternate = ["notes"])
+    @SerializedName("description")
     val description: String? = null,
     @SerializedName("notes")
     val notes: String? = null,
     @SerializedName("chapter")
     val chapter: String? = null,
-    @SerializedName("due_date", alternate = ["endTime"])
+    @SerializedName("due_date")
     val dueDate: String? = null,
     @SerializedName("startTime")
     val startTime: String? = null,
@@ -100,7 +104,7 @@ data class Activity(
     val isOverdue: Boolean? = false,
     @SerializedName("completedAt")
     val completedAt: String? = null,
-    @SerializedName("created_at", alternate = ["createdAt"])
+    @SerializedName("createdAt")
     val createdAt: String? = null,
     @SerializedName("studentEmail")
     val studentEmail: String? = null,
@@ -115,7 +119,13 @@ data class Activity(
         get() = activityName ?: subject ?: title ?: ""
     
     val status: String
-        get() = _status ?: if (isCompleted == true || isCompletedToday == true) "Completed" else "Pending"
+        get() {
+            return when {
+                isCompleted == true || isCompletedToday == true -> "Completed"
+                isOverdue == true -> "Overdue"
+                else -> "Pending"
+            }
+        }
     
     val activityIdString: String
         get() = activityId?.toString() ?: timetableId?.toString() ?: id ?: ""

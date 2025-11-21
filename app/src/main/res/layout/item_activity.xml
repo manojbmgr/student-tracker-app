@@ -28,7 +28,14 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Pending"
-            android:textSize="12sp"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:background="@drawable/badge_background"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
