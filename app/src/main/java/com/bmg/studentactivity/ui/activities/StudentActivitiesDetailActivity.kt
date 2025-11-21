@@ -1,5 +1,6 @@
 package com.bmg.studentactivity.ui.activities
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -43,6 +44,8 @@ class StudentActivitiesDetailActivity : AppCompatActivity() {
             currentStudent = student
             setupUI(student)
             setupSwipeRefresh()
+            // Automatically refresh data when activity opens
+            refreshActivities()
         } else {
             finish()
         }
@@ -60,6 +63,9 @@ class StudentActivitiesDetailActivity : AppCompatActivity() {
             binding.swipeRefreshLayout.isRefreshing = false
             return
         }
+        
+        // Show refresh indicator
+        binding.swipeRefreshLayout.isRefreshing = true
         
         lifecycleScope.launch {
             try {
@@ -140,10 +146,16 @@ class StudentActivitiesDetailActivity : AppCompatActivity() {
         binding.tvCompletionPercentage.text = "Completion: ${stats.completionPercentage}%"
         
         // Setup RecyclerView
-        adapter = ActivitiesAdapter { activity ->
-            // Action button click handler - will be used for submission later
-            android.widget.Toast.makeText(this, "Action for: ${activity.displayTitle}", android.widget.Toast.LENGTH_SHORT).show()
-        }
+        adapter = ActivitiesAdapter(
+            onActionClick = { activity ->
+                handleActivityAction(activity)
+            },
+            onImageClick = { imageUrl ->
+                val intent = Intent(this, ImageViewerActivity::class.java)
+                intent.putExtra(ImageViewerActivity.EXTRA_IMAGE_URL, imageUrl)
+                startActivity(intent)
+            }
+        )
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
         
@@ -157,6 +169,92 @@ class StudentActivitiesDetailActivity : AppCompatActivity() {
         } else {
             binding.tvNoData.visibility = android.view.View.GONE
             binding.recyclerView.visibility = android.view.View.VISIBLE
+        }
+    }
+    
+    private fun handleActivityAction(activity: com.bmg.studentactivity.data.models.Activity) {
+        try {
+            val status = activity.status
+            
+            when (status) {
+                "Completed" -> {
+                    // If has completion image, show image viewer, otherwise show update dialog
+                    if (activity.hasCompletionImage && activity.completionImageUrl != null) {
+                        val intent = Intent(this, ImageViewerActivity::class.java)
+                        intent.putExtra(ImageViewerActivity.EXTRA_IMAGE_URL, activity.completionImageUrl)
+                        startActivity(intent)
+                    } else {
+                        showUpdateDialog(activity)
+                    }
+                }
+                "Failed", "Pending", "Overdue" -> {
+                    showUpdateDialog(activity)
+                }
+                else -> {
+                    showUpdateDialog(activity)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("StudentActivitiesDetailActivity", "Error handling activity action: ${e.message}", e)
+            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    private fun showUpdateDialog(activity: com.bmg.studentactivity.data.models.Activity) {
+        try {
+            if (isFinishing || isDestroyed) {
+                android.util.Log.w("StudentActivitiesDetailActivity", "Activity is finishing, cannot show dialog")
+                return
+            }
+            
+            val studentEmail = currentStudent?.studentEmail
+            if (studentEmail.isNullOrEmpty()) {
+                android.util.Log.e("StudentActivitiesDetailActivity", "Student email is null or empty")
+                Toast.makeText(this, "Student email not available", Toast.LENGTH_SHORT).show()
+                return
+            }
+            
+            // Check if fragment manager is available and not in saved state
+            if (supportFragmentManager.isStateSaved) {
+                android.util.Log.w("StudentActivitiesDetailActivity", "Fragment manager state is saved, cannot show dialog")
+                Toast.makeText(this, "Please try again", Toast.LENGTH_SHORT).show()
+                return
+            }
+            
+            android.util.Log.d("StudentActivitiesDetailActivity", "Showing update dialog for activity: ${activity.displayTitle}")
+            
+            val dialog = com.bmg.studentactivity.ui.activities.dialogs.UpdateTaskDialog.newInstance(
+                activity = activity,
+                studentEmail = studentEmail,
+                onUpdateComplete = { updatedActivity ->
+                    // Refresh activities after update
+                    android.util.Log.d("StudentActivitiesDetailActivity", "Task updated, refreshing activities")
+                    refreshActivities()
+                }
+            )
+            
+            // Use commitAllowingStateLoss to prevent crashes if state is saved
+            dialog.show(supportFragmentManager, "UpdateTaskDialog")
+        } catch (e: IllegalStateException) {
+            android.util.Log.e("StudentActivitiesDetailActivity", "IllegalStateException showing dialog: ${e.message}", e)
+            // Try to show dialog using commitAllowingStateLoss
+            try {
+                val studentEmail = currentStudent?.studentEmail ?: return
+                val dialog = com.bmg.studentactivity.ui.activities.dialogs.UpdateTaskDialog.newInstance(
+                    activity = activity,
+                    studentEmail = studentEmail,
+                    onUpdateComplete = { updatedActivity ->
+                        refreshActivities()
+                    }
+                )
+                dialog.showNow(supportFragmentManager, "UpdateTaskDialog")
+            } catch (e2: Exception) {
+                android.util.Log.e("StudentActivitiesDetailActivity", "Error showing dialog with showNow: ${e2.message}", e2)
+                Toast.makeText(this, "Error showing dialog. Please try again.", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("StudentActivitiesDetailActivity", "Error showing update dialog: ${e.message}", e)
+            Toast.makeText(this, "Error showing dialog: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
     

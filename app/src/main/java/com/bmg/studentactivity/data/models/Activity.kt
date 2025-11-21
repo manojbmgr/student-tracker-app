@@ -113,7 +113,13 @@ data class Activity(
     @SerializedName("alarmAudio")
     val alarmAudio: String? = null,
     @SerializedName("alarmAudioUrl")
-    val alarmAudioUrl: String? = null
+    val alarmAudioUrl: String? = null,
+    @SerializedName("completionImage")
+    val completionImage: String? = null,
+    @SerializedName("completionImageUrl")
+    val completionImageUrl: String? = null,
+    @SerializedName("remark")
+    val remark: String? = null
 ) {
     val displayTitle: String
         get() = activityName ?: subject ?: title ?: ""
@@ -122,6 +128,7 @@ data class Activity(
         get() {
             return when {
                 isCompleted == true || isCompletedToday == true -> "Completed"
+                remark != null && remark.isNotEmpty() && (isCompleted != true && isCompletedToday != true) -> "Failed"
                 isOverdue == true -> "Overdue"
                 else -> "Pending"
             }
@@ -129,4 +136,10 @@ data class Activity(
     
     val activityIdString: String
         get() = activityId?.toString() ?: timetableId?.toString() ?: id ?: ""
+    
+    val hasCompletionImage: Boolean
+        get() = !completionImageUrl.isNullOrEmpty()
+    
+    val hasRemark: Boolean
+        get() = !remark.isNullOrEmpty()
 }

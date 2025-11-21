@@ -165,5 +165,19 @@ class ActivitiesViewModel @Inject constructor(
         )
     }
     
+    /**
+     * Get all overdue activities with alarm URLs from all students
+     */
+    fun getOverdueActivitiesWithAlarms(): List<com.bmg.studentactivity.data.models.Activity> {
+        val allStudents = _studentsData.value ?: emptyList()
+        return allStudents.flatMap { student ->
+            student.activities.filter { activity ->
+                activity.isOverdue == true &&
+                (activity.isCompleted != true && activity.isCompletedToday != true) &&
+                !activity.alarmAudioUrl.isNullOrEmpty()
+            }
+        }
+    }
+    
 }
 

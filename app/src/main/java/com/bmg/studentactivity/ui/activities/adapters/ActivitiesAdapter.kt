@@ -8,9 +8,11 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bmg.studentactivity.data.models.Activity
 import com.bmg.studentactivity.databinding.ItemActivityBinding
+import com.bumptech.glide.Glide
 
 class ActivitiesAdapter(
-    private val onActionClick: (Activity) -> Unit
+    private val onActionClick: (Activity) -> Unit,
+    private val onImageClick: ((String) -> Unit)? = null
 ) : ListAdapter<Activity, ActivitiesAdapter.ViewHolder>(DiffCallback()) {
     
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -51,6 +53,14 @@ class ActivitiesAdapter(
                     binding.tvStatus.background = badgeDrawable
                     binding.tvStatus.setTextColor(android.graphics.Color.WHITE)
                 }
+                "Failed" -> {
+                    // Light orange/red background for card
+                    binding.root.setCardBackgroundColor(android.graphics.Color.parseColor("#FFF3E0"))
+                    // Orange/red badge
+                    badgeDrawable.setColor(android.graphics.Color.parseColor("#FF5722"))
+                    binding.tvStatus.background = badgeDrawable
+                    binding.tvStatus.setTextColor(android.graphics.Color.WHITE)
+                }
                 "Overdue" -> {
                     // Light red background for card
                     binding.root.setCardBackgroundColor(android.graphics.Color.parseColor("#FFEBEE"))
@@ -69,6 +79,43 @@ class ActivitiesAdapter(
                 }
             }
             
+            // Show completion image if available
+            if (activity.hasCompletionImage && activity.completionImageUrl != null) {
+                binding.imgCompletion.visibility = android.view.View.VISIBLE
+                Glide.with(binding.root.context)
+                    .load(activity.completionImageUrl)
+                    .centerCrop()
+                    .placeholder(android.R.drawable.ic_menu_gallery)
+                    .error(android.R.drawable.ic_menu_report_image)
+                    .into(binding.imgCompletion)
+                
+                // Make image clickable to view full screen
+                binding.imgCompletion.setOnClickListener {
+                    onImageClick?.invoke(activity.completionImageUrl!!)
+                }
+            } else {
+                binding.imgCompletion.visibility = android.view.View.GONE
+                binding.imgCompletion.setOnClickListener(null)
+            }
+            
+            // Show remark if available and update position
+            if (activity.hasRemark && activity.remark != null) {
+                binding.tvRemark.visibility = android.view.View.VISIBLE
+                binding.tvRemark.text = "Remark: ${activity.remark}"
+                // Update constraint based on whether completion image is visible
+                val params = binding.tvRemark.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+                if (activity.hasCompletionImage) {
+                    params.topToBottom = binding.imgCompletion.id
+                    params.topMargin = (4 * binding.root.context.resources.displayMetrics.density).toInt()
+                } else {
+                    params.topToBottom = binding.tvSubject.id
+                    params.topMargin = (8 * binding.root.context.resources.displayMetrics.density).toInt()
+                }
+                binding.tvRemark.layoutParams = params
+            } else {
+                binding.tvRemark.visibility = android.view.View.GONE
+            }
+            
             // Show time if available
             val timeInfo = if (activity.startTime != null && activity.endTime != null) {
                 "${activity.startTime} - ${activity.endTime}"
@@ -82,8 +129,12 @@ class ActivitiesAdapter(
                 binding.tvDescription.text = "${binding.tvDescription.text}\n$timeInfo".trim()
             }
             
-            // Update action button
-            binding.btnComplete.text = "Action"
+            // Update action button text based on status
+            binding.btnComplete.text = when (status) {
+                "Completed" -> "View"
+                "Failed" -> "Retry"
+                else -> "Action"
+            }
             binding.btnComplete.setOnClickListener {
                 onActionClick(activity)
             }

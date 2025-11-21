@@ -1,11 +1,14 @@
 package com.bmg.studentactivity.di
 
+import android.content.Context
 import com.bmg.studentactivity.data.api.ApiClient
 import com.bmg.studentactivity.data.api.ApiService
+import com.bmg.studentactivity.data.repository.ActivityRepository
 import com.bmg.studentactivity.utils.TokenManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -26,6 +29,15 @@ object NetworkModule {
         )
         android.util.Log.d("NetworkModule", "ApiService provided and initialized")
         return ApiClient.apiService
+    }
+    
+    @Provides
+    @Singleton
+    fun provideActivityRepository(
+        apiService: ApiService,
+        @ApplicationContext context: Context
+    ): ActivityRepository {
+        return ActivityRepository(apiService, context)
     }
 }
 

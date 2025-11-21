@@ -1,10 +1,24 @@
 package com.bmg.studentactivity.data.repository
 
+import android.content.Context
+import android.net.Uri
 import com.bmg.studentactivity.data.api.ApiService
 import com.bmg.studentactivity.data.models.ActivitiesRequest
 import com.bmg.studentactivity.data.models.ActivitiesResponse
+import com.bmg.studentactivity.data.models.CompleteActivityRequest
+import com.bmg.studentactivity.data.models.CompleteActivityResponse
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
 
-class ActivityRepository(private val apiService: ApiService) {
+class ActivityRepository(
+    private val apiService: ApiService,
+    private val context: Context
+) {
     suspend fun getActivities(
         studentEmail: String? = null,
         day: String? = null,
@@ -77,6 +91,130 @@ class ActivityRepository(private val apiService: ApiService) {
                 else -> "Error: ${e.message ?: "Unknown error"}"
             }
             Result.failure(Exception(errorMsg, e))
+        }
+    }
+    
+    suspend fun completeActivity(
+        studentEmail: String,
+        timetableId: Int? = null,
+        activityId: Int? = null,
+        isCompleted: Boolean = true,
+        remark: String? = null
+    ): Result<CompleteActivityResponse> {
+        return try {
+            android.util.Log.d("ActivityRepository", "=== Starting complete activity API call ===")
+            android.util.Log.d("ActivityRepository", "studentEmail=$studentEmail, timetableId=$timetableId, activityId=$activityId, isCompleted=$isCompleted")
+            
+            val request = CompleteActivityRequest(
+                studentEmail = studentEmail,
+                timetableId = timetableId,
+                activityId = activityId,
+                isCompleted = isCompleted,
+                remark = remark
+            )
+            
+            val response = apiService.completeActivity(request)
+            
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null) {
+                    android.util.Log.d("ActivityRepository", "Activity completion successful")
+                    Result.success(body)
+                } else {
+                    Result.failure(Exception("Complete activity response body is null"))
+                }
+            } else {
+                val errorBody = try {
+                    response.errorBody()?.string()
+                } catch (e: Exception) {
+                    null
+                }
+                val errorMessage = errorBody ?: "HTTP ${response.code()}: ${response.message()}"
+                android.util.Log.e("ActivityRepository", "Complete activity error: $errorMessage")
+                Result.failure(Exception(errorMessage))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ActivityRepository", "Exception in completeActivity: ${e.message}", e)
+            Result.failure(Exception("Failed to update activity: ${e.message ?: "Unknown error"}", e))
+        }
+    }
+    
+    suspend fun completeActivityWithImage(
+        studentEmail: String,
+        timetableId: Int? = null,
+        activityId: Int? = null,
+        isCompleted: Boolean = true,
+        remark: String? = null,
+        imageUri: Uri? = null
+    ): Result<CompleteActivityResponse> {
+        return try {
+            android.util.Log.d("ActivityRepository", "=== Starting complete activity with image API call ===")
+            
+            val studentEmailBody = studentEmail.toRequestBody("text/plain".toMediaTypeOrNull())
+            val timetableIdBody = timetableId?.toString()?.toRequestBody("text/plain".toMediaTypeOrNull())
+            val activityIdBody = activityId?.toString()?.toRequestBody("text/plain".toMediaTypeOrNull())
+            val isCompletedBody = isCompleted.toString().toRequestBody("text/plain".toMediaTypeOrNull())
+            val remarkBody = remark?.toRequestBody("text/plain".toMediaTypeOrNull())
+            
+            var imagePart: MultipartBody.Part? = null
+            if (imageUri != null) {
+                try {
+                    val imageFile = getFileFromUri(imageUri)
+                    if (imageFile != null && imageFile.exists()) {
+                        val requestFile = imageFile.asRequestBody("image/*".toMediaTypeOrNull())
+                        imagePart = MultipartBody.Part.createFormData("completionImage", imageFile.name, requestFile)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("ActivityRepository", "Error processing image: ${e.message}", e)
+                }
+            }
+            
+            val response = apiService.completeActivityWithImage(
+                studentEmail = studentEmailBody,
+                timetableId = timetableIdBody,
+                activityId = activityIdBody,
+                isCompleted = isCompletedBody,
+                remark = remarkBody,
+                image = imagePart
+            )
+            
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null) {
+                    android.util.Log.d("ActivityRepository", "Activity completion with image successful")
+                    Result.success(body)
+                } else {
+                    Result.failure(Exception("Complete activity response body is null"))
+                }
+            } else {
+                val errorBody = try {
+                    response.errorBody()?.string()
+                } catch (e: Exception) {
+                    null
+                }
+                val errorMessage = errorBody ?: "HTTP ${response.code()}: ${response.message()}"
+                android.util.Log.e("ActivityRepository", "Complete activity with image error: $errorMessage")
+                Result.failure(Exception(errorMessage))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ActivityRepository", "Exception in completeActivityWithImage: ${e.message}", e)
+            Result.failure(Exception("Failed to update activity with image: ${e.message ?: "Unknown error"}", e))
+        }
+    }
+    
+    private fun getFileFromUri(uri: Uri): File? {
+        return try {
+            val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+            inputStream?.use { input ->
+                val tempFile = File(context.cacheDir, "temp_image_${System.currentTimeMillis()}.jpg")
+                FileOutputStream(tempFile).use { output ->
+                    input.copyTo(output)
+                }
+                tempFile
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ActivityRepository", "Error getting file from URI: ${e.message}", e)
+            null
         }
     }
 }
