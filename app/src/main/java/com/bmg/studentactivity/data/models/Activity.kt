@@ -5,35 +5,118 @@ import com.google.gson.annotations.SerializedName
 data class ActivitiesResponse(
     @SerializedName("status")
     val status: String,
+    @SerializedName("timestamp")
+    val timestamp: String? = null,
     @SerializedName("message")
-    val message: String,
+    val message: String? = null,
     @SerializedName("data")
-    val data: List<Activity>?
+    val data: ActivitiesData?
 ) {
     val success: Boolean
         get() = status.equals("success", ignoreCase = true)
 }
 
+data class ActivitiesData(
+    @SerializedName("students")
+    val students: List<StudentActivities>? = null,
+    @SerializedName("activities")
+    val activities: List<Activity>? = null,
+    @SerializedName("statistics")
+    val statistics: ActivityStatistics? = null,
+    @SerializedName("overallStatistics")
+    val overallStatistics: ActivityStatistics? = null,
+    @SerializedName("currentTime")
+    val currentTime: String? = null,
+    @SerializedName("currentDay")
+    val currentDay: String? = null,
+    @SerializedName("date")
+    val date: String? = null
+)
+
+data class StudentActivities(
+    @SerializedName("studentEmail")
+    val studentEmail: String,
+    @SerializedName("studentName")
+    val studentName: String? = null,
+    @SerializedName("activities")
+    val activities: List<Activity>,
+    @SerializedName("statistics")
+    val statistics: ActivityStatistics
+)
+
+data class ActivityStatistics(
+    @SerializedName("total")
+    val total: Int = 0,
+    @SerializedName("completed")
+    val completed: Int = 0,
+    @SerializedName("pending")
+    val pending: Int = 0,
+    @SerializedName("overdue")
+    val overdue: Int = 0,
+    @SerializedName("completionPercentage")
+    val completionPercentage: Double = 0.0
+)
+
 data class Activity(
     @SerializedName("id", alternate = ["timetableId", "activityId"])
-    val id: String,
+    val id: String? = null,
+    @SerializedName("timetableId")
+    val timetableId: Int? = null,
+    @SerializedName("activityId")
+    val activityId: Int? = null,
     @SerializedName("title", alternate = ["activityName", "subject"])
-    val title: String,
-    @SerializedName("description", alternate = ["notes"])
-    val description: String?,
+    val title: String? = null,
+    @SerializedName("activityName")
+    val activityName: String? = null,
     @SerializedName("subject")
-    val subject: String?,
+    val subject: String? = null,
+    @SerializedName("activityType")
+    val activityType: String? = null,
+    @SerializedName("description", alternate = ["notes"])
+    val description: String? = null,
+    @SerializedName("notes")
+    val notes: String? = null,
     @SerializedName("chapter")
-    val chapter: String?,
+    val chapter: String? = null,
     @SerializedName("due_date", alternate = ["endTime"])
-    val dueDate: String?,
+    val dueDate: String? = null,
+    @SerializedName("startTime")
+    val startTime: String? = null,
+    @SerializedName("endTime")
+    val endTime: String? = null,
+    @SerializedName("dayOfWeek")
+    val dayOfWeek: String? = null,
+    @SerializedName("location")
+    val location: String? = null,
+    @SerializedName("teacher")
+    val teacher: String? = null,
     @SerializedName("status")
-    val _status: String?,
+    val _status: String? = null,
     @SerializedName("isCompleted")
     val isCompleted: Boolean? = false,
+    @SerializedName("isCompletedToday")
+    val isCompletedToday: Boolean? = false,
+    @SerializedName("isOverdue")
+    val isOverdue: Boolean? = false,
+    @SerializedName("completedAt")
+    val completedAt: String? = null,
     @SerializedName("created_at", alternate = ["createdAt"])
-    val createdAt: String?
+    val createdAt: String? = null,
+    @SerializedName("studentEmail")
+    val studentEmail: String? = null,
+    @SerializedName("studentName")
+    val studentName: String? = null,
+    @SerializedName("alarmAudio")
+    val alarmAudio: String? = null,
+    @SerializedName("alarmAudioUrl")
+    val alarmAudioUrl: String? = null
 ) {
+    val displayTitle: String
+        get() = activityName ?: subject ?: title ?: ""
+    
     val status: String
-        get() = _status ?: if (isCompleted == true) "Completed" else "Pending"
+        get() = _status ?: if (isCompleted == true || isCompletedToday == true) "Completed" else "Pending"
+    
+    val activityIdString: String
+        get() = activityId?.toString() ?: timetableId?.toString() ?: id ?: ""
 }

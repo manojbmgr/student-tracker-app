@@ -55,6 +55,11 @@
             android:exported="false"
             android:parentActivityName=".ui.dashboard.DashboardActivity"
             android:theme="@style/Theme.StudentActivity" />
+        <activity
+            android:name=".ui.settings.SettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.dashboard.DashboardActivity"
+            android:theme="@style/Theme.StudentActivity" />
     </application>
 
 </manifest>
