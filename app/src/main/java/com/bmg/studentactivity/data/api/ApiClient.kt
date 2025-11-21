@@ -9,12 +9,10 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    private var tokenProvider: (() -> String?)? = null
     private var apiKeyProvider: (() -> String?)? = null
     private var retrofitInstance: Retrofit? = null
     
-    fun initialize(tokenProvider: () -> String?, apiKeyProvider: () -> String?) {
-        this.tokenProvider = tokenProvider
+    fun initialize(apiKeyProvider: () -> String?) {
         this.apiKeyProvider = apiKeyProvider
         
         val loggingInterceptor = HttpLoggingInterceptor().apply {
@@ -22,7 +20,6 @@ object ApiClient {
         }
         
         val authInterceptor = AuthInterceptor(
-            tokenProvider = tokenProvider,
             apiKeyProvider = apiKeyProvider
         )
         
