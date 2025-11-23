@@ -1,5 +1,9 @@
 package com.bmg.studentactivity.services
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.graphics.PixelFormat
@@ -14,6 +18,7 @@ import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.app.NotificationCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bmg.studentactivity.R
@@ -27,9 +32,12 @@ class AlarmOverlayService : Service() {
     private var adapter: AlarmTaskAdapter? = null
     private var overdueActivities: List<Activity> = emptyList()
     private var currentPlayingIndex = -1
+    private var isForegroundServiceStarted = false
     
     companion object {
         private const val TAG = "AlarmOverlayService"
+        private const val CHANNEL_ID = "AlarmOverlayServiceChannel"
+        private const val NOTIFICATION_ID = 3
         const val ACTION_SHOW_OVERLAY = "com.bmg.studentactivity.SHOW_OVERLAY"
         const val ACTION_HIDE_OVERLAY = "com.bmg.studentactivity.HIDE_OVERLAY"
         const val ACTION_UPDATE_OVERLAY = "com.bmg.studentactivity.UPDATE_OVERLAY"
@@ -40,10 +48,56 @@ class AlarmOverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        createNotificationChannel()
         Log.d(TAG, "AlarmOverlayService created")
     }
     
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Alarm Overlay",
+                NotificationManager.IMPORTANCE_LOW // Low importance since it's just an overlay
+            ).apply {
+                description = "Shows overlay for overdue task alarms"
+                setShowBadge(false)
+            }
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+    
+    private fun createNotification(): Notification {
+        val intent = Intent(this, ActivitiesActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Alarm Overlay Active")
+            .setContentText("Showing overdue task information")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setSilent(true)
+            .setAutoCancel(false)
+            .build()
+    }
+    
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Start as foreground service to ensure it runs in background
+        if (!isForegroundServiceStarted) {
+            startForeground(NOTIFICATION_ID, createNotification())
+            isForegroundServiceStarted = true
+            Log.d(TAG, "Service started as foreground")
+        }
+        
         when (intent?.action) {
             ACTION_SHOW_OVERLAY -> {
                 val activitiesJson = intent.getStringExtra(EXTRA_OVERDUE_ACTIVITIES)
@@ -69,6 +123,15 @@ class AlarmOverlayService : Service() {
             }
             ACTION_HIDE_OVERLAY -> {
                 hideOverlay()
+                // Stop foreground service when overlay is hidden
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    stopForeground(Service.STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
+                isForegroundServiceStarted = false
+                stopSelf()
             }
         }
         return START_STICKY
@@ -77,6 +140,12 @@ class AlarmOverlayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     
     private fun showOverlay(activities: List<Activity>, currentIndex: Int) {
+        // Ensure service is in foreground
+        if (!isForegroundServiceStarted) {
+            startForeground(NOTIFICATION_ID, createNotification())
+            isForegroundServiceStarted = true
+        }
+        
         if (overlayView != null) {
             updateOverlay(activities, currentIndex)
             return

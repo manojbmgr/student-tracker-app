@@ -36,8 +36,11 @@ class StudentActivitiesAdapter(
         init {
             // Make the entire card clickable
             binding.root.setOnClickListener {
-                val student = getItem(adapterPosition)
-                onStudentClick(student)
+                val position = adapterPosition
+                if (position != RecyclerView.NO_POSITION) {
+                    val student = getItem(position)
+                    onStudentClick(student)
+                }
             }
         }
         

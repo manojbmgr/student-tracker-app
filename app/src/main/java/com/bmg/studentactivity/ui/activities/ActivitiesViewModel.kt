@@ -32,6 +32,9 @@ class ActivitiesViewModel @Inject constructor(
     val error: LiveData<String?> = _error
     
     private var currentFilter: ActivityFilter = ActivityFilter.ALL
+    private var lastStudentEmail: String? = null
+    private var lastDay: String? = null
+    private var lastStatus: String? = null
     
     enum class ActivityFilter {
         ALL, COMPLETED, PENDING, OVERDUE
@@ -42,6 +45,10 @@ class ActivitiesViewModel @Inject constructor(
         day: String? = null,
         status: String? = null
     ) {
+        // Store filter parameters for refresh
+        lastStudentEmail = studentEmail
+        lastDay = day
+        lastStatus = status
         viewModelScope.launch {
             _loading.value = true
             _error.value = null
@@ -61,9 +68,11 @@ class ActivitiesViewModel @Inject constructor(
                         } else if (response.data.activities != null) {
                             android.util.Log.d("ActivitiesViewModel", "Found ${response.data.activities.size} activities")
                             // Convert activities list to student activities format
+                            // Try to get studentEmail from first activity if available
+                            val firstActivityEmail = response.data.activities.firstOrNull()?.studentEmail
                             val studentActivities = StudentActivities(
-                                studentEmail = "",
-                                studentName = null,
+                                studentEmail = firstActivityEmail ?: studentEmail ?: "Unknown",
+                                studentName = response.data.activities.firstOrNull()?.studentName,
                                 activities = response.data.activities,
                                 statistics = response.data.statistics ?: com.bmg.studentactivity.data.models.ActivityStatistics()
                             )
@@ -100,8 +109,8 @@ class ActivitiesViewModel @Inject constructor(
     }
     
     fun refreshActivities() {
-        // Reload activities with current filter parameters
-        loadActivities()
+        // Reload activities with last used filter parameters
+        loadActivities(lastStudentEmail, lastDay, lastStatus)
     }
     
     private fun applyFilter(filter: ActivityFilter) {
@@ -126,8 +135,10 @@ class ActivitiesViewModel @Inject constructor(
             }
             
             ActivityFilter.PENDING -> allStudents.map { student ->
-                val pendingActivities = student.activities.filter { 
-                    (it.isCompleted != true && it.isCompletedToday != true) && (it.isOverdue != true)
+                val pendingActivities = student.activities.filter { activity ->
+                    val isCompleted = activity.isCompleted == true || activity.isCompletedToday == true
+                    val isOverdue = activity.isOverdue == true
+                    !isCompleted && !isOverdue
                 }
                 student.copy(
                     activities = pendingActivities,
@@ -151,9 +162,17 @@ class ActivitiesViewModel @Inject constructor(
     
     private fun calculateStatistics(activities: List<com.bmg.studentactivity.data.models.Activity>): com.bmg.studentactivity.data.models.ActivityStatistics {
         val total = activities.size
-        val completed = activities.count { it.isCompleted == true || it.isCompletedToday == true }
-        val pending = activities.count { (it.isCompleted != true && it.isCompletedToday != true) && (it.isOverdue != true) }
-        val overdue = activities.count { it.isOverdue == true }
+        val completed = activities.count { activity ->
+            activity.isCompleted == true || activity.isCompletedToday == true
+        }
+        val overdue = activities.count { activity ->
+            activity.isOverdue == true
+        }
+        val pending = activities.count { activity ->
+            val isCompleted = activity.isCompleted == true || activity.isCompletedToday == true
+            val isOverdue = activity.isOverdue == true
+            !isCompleted && !isOverdue
+        }
         val completionPercentage = if (total > 0) (completed.toDouble() / total * 100) else 0.0
         
         return com.bmg.studentactivity.data.models.ActivityStatistics(
@@ -172,9 +191,10 @@ class ActivitiesViewModel @Inject constructor(
         val allStudents = _studentsData.value ?: emptyList()
         return allStudents.flatMap { student ->
             student.activities.filter { activity ->
-                activity.isOverdue == true &&
-                (activity.isCompleted != true && activity.isCompletedToday != true) &&
-                !activity.alarmAudioUrl.isNullOrEmpty()
+                val isOverdue = activity.isOverdue == true
+                val isCompleted = activity.isCompleted == true || activity.isCompletedToday == true
+                val hasAlarmUrl = !activity.alarmAudioUrl.isNullOrEmpty()
+                isOverdue && !isCompleted && hasAlarmUrl
             }
         }
     }

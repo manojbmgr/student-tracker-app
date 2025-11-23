@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#E1F5FE"
+    android:gravity="center"
+    android:padding="24dp"
+    tools:context=".ui.activities.AlarmFullScreenActivity">
+
+    <ImageView
+        android:id="@+id/ivAlarmIcon"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_centerHorizontal="true"
+        android:src="@android:drawable/ic_lock_idle_alarm"
+        android:tint="#03A9F4" />
+
+    <TextView
+        android:id="@+id/tvAlarmTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/ivAlarmIcon"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="16dp"
+        android:text="Overdue Task"
+        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        android:textColor="#01579B"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvTaskName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/tvAlarmTitle"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="24dp"
+        android:gravity="center"
+        android:text="Task Name"
+        android:textAppearance="@style/TextAppearance.AppCompat.Headline"
+        android:textColor="#0277BD" />
+
+    <TextView
+        android:id="@+id/tvStudentName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/tvTaskName"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="8dp"
+        android:text="Student Name"
+        android:textAppearance="@style/TextAppearance.AppCompat.Subhead"
+        android:textColor="#29B6F6" />
+
+    <TextView
+        android:id="@+id/tvDueTime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/tvStudentName"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="16dp"
+        android:text="Due: 10:00 AM"
+        android:textAppearance="@style/TextAppearance.AppCompat.Body1"
+        android:textColor="#0288D1" />
+
+    <Button
+        android:id="@+id/btnDismiss"
+        android:layout_width="wrap_content"
+        android:layout_height="60dp"
+        android:layout_below="@id/tvDueTime"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="32dp"
+        android:paddingStart="40dp"
+        android:paddingEnd="40dp"
+        android:text="Dismiss"
+        android:textSize="18sp" />
+
+</RelativeLayout>

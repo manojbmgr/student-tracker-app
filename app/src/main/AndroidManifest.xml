@@ -16,6 +16,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -69,6 +70,15 @@
             android:exported="false"
             android:parentActivityName=".ui.activities.StudentActivitiesDetailActivity"
             android:theme="@style/Theme.StudentActivity" />
+        <activity
+            android:name=".ui.activities.AlarmFullScreenActivity"
+            android:exported="false"
+            android:theme="@style/Theme.StudentActivity.FullScreen"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true" />
         <service
             android:name=".services.AlarmService"
             android:enabled="true"
@@ -83,19 +93,25 @@
             android:name=".services.AlarmOverlayService"
             android:enabled="true"
             android:exported="false"
-            android:permission="android.permission.SYSTEM_ALERT_WINDOW" />
+            android:foregroundServiceType="dataSync" />
         <receiver
             android:name=".receivers.BootReceiver"
             android:enabled="true"
             android:exported="true"
-            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            tools:ignore="ExportedReceiver">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </receiver>
+        <receiver
+            android:name=".receivers.AlarmCheckReceiver"
+            android:enabled="true"
+            android:exported="false" />
     </application>
 
 </manifest>

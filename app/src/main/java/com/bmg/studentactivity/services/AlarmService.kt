@@ -21,6 +21,7 @@ import androidx.core.app.NotificationCompat
 import com.bmg.studentactivity.R
 import com.bmg.studentactivity.data.models.Activity
 import com.bmg.studentactivity.ui.activities.ActivitiesActivity
+import com.bmg.studentactivity.ui.activities.AlarmFullScreenActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,8 +31,11 @@ import java.io.IOException
 
 class AlarmService : Service() {
     private var mediaPlayer: MediaPlayer? = null
+    private val mediaPlayerLock = Any()
     private var currentAlarmIndex = 0
+    @Volatile
     private var overdueActivities: List<Activity> = emptyList()
+    private val overdueActivitiesLock = Any()
     private var isPlaying = false
     private var alarmJob: Job? = null
     private var checkOverdueJob: Job? = null
@@ -110,12 +114,13 @@ class AlarmService : Service() {
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // CRITICAL: Start as foreground service immediately to ensure it works with locked screen
-        // This must be done before any other operations
-        if (!isForegroundServiceStarted) {
-            startForeground(NOTIFICATION_ID, createNotification(0))
-            isForegroundServiceStarted = true
-            Log.d(TAG, "Service started as foreground immediately in onStartCommand")
+        // We will call startForeground later, once we have an activity to show.
+        // The WakeLock will keep the service alive until then.
+        Log.d(TAG, "onStartCommand received with action: ${intent?.action}")
+
+        // Ensure wake lock is held
+        if (wakeLock?.isHeld != true) {
+            acquireWakeLock()
         }
         
         when (intent?.action) {
@@ -256,11 +261,17 @@ class AlarmService : Service() {
             return
         }
         
-        overdueActivities = overdueTasks
+        synchronized(overdueActivitiesLock) {
+            overdueActivities = overdueTasks
+        }
         currentAlarmIndex = 0
         
-        // Start foreground service
-        startForeground(NOTIFICATION_ID, createNotification(overdueTasks.size))
+        // We will call startForeground from playNextAlarm, once we have a specific task.
+        
+        // Ensure wake lock is held
+        if (wakeLock?.isHeld != true) {
+            acquireWakeLock()
+        }
         
         // Start overlay service
         startOverlayService(overdueTasks, 0)
@@ -316,34 +327,36 @@ class AlarmService : Service() {
                                         Log.d(TAG, "Fresh API data: ${freshOverdueTasks.size} overdue tasks with alarms")
                                         
                                         // Update with fresh data
-                                        if (freshOverdueTasks.isEmpty() && overdueActivities.isNotEmpty()) {
-                                            Log.w(TAG, "=== No overdue tasks found in fresh API data ===")
-                                            Log.w(TAG, "Stopping alarms - all tasks completed or no longer overdue")
-                                            stopAlarms()
-                                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                                                stopForeground(Service.STOP_FOREGROUND_REMOVE)
+                                        synchronized(overdueActivitiesLock) {
+                                            if (freshOverdueTasks.isEmpty() && overdueActivities.isNotEmpty()) {
+                                                Log.w(TAG, "=== No overdue tasks found in fresh API data ===")
+                                                Log.w(TAG, "Stopping alarms - all tasks completed or no longer overdue")
+                                                stopAlarms()
+                                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                                                    stopForeground(Service.STOP_FOREGROUND_REMOVE)
+                                                } else {
+                                                    @Suppress("DEPRECATION")
+                                                    stopForeground(true)
+                                                }
+                                                stopSelf()
+                                                shouldContinue = false // Exit the loop instead of break
+                                            } else if (freshOverdueTasks.size != overdueActivities.size) {
+                                                Log.d(TAG, "Overdue count changed: ${overdueActivities.size} -> ${freshOverdueTasks.size}")
+                                                overdueActivities = freshOverdueTasks
+                                                // Update notification
+                                                val currentActivity = if (currentAlarmIndex < overdueActivities.size) {
+                                                    overdueActivities[currentAlarmIndex]
+                                                } else null
+                                                startForeground(NOTIFICATION_ID, createNotification(overdueActivities.size, currentActivity))
+                                                // Update overlay
+                                                updateOverlayService(overdueActivities, currentAlarmIndex)
+                                                // Reset index if needed
+                                                if (currentAlarmIndex >= overdueActivities.size) {
+                                                    currentAlarmIndex = 0
+                                                }
                                             } else {
-                                                @Suppress("DEPRECATION")
-                                                stopForeground(true)
+                                                Log.d(TAG, "All ${overdueActivities.size} overdue tasks still active - alarms continue")
                                             }
-                                            stopSelf()
-                                            shouldContinue = false // Exit the loop instead of break
-                                        } else if (freshOverdueTasks.size != overdueActivities.size) {
-                                            Log.d(TAG, "Overdue count changed: ${overdueActivities.size} -> ${freshOverdueTasks.size}")
-                                            overdueActivities = freshOverdueTasks
-                                            // Update notification
-                                            val currentActivity = if (currentAlarmIndex < overdueActivities.size) {
-                                                overdueActivities[currentAlarmIndex]
-                                            } else null
-                                            startForeground(NOTIFICATION_ID, createNotification(overdueActivities.size, currentActivity))
-                                            // Update overlay
-                                            updateOverlayService(overdueActivities, currentAlarmIndex)
-                                            // Reset index if needed
-                                            if (currentAlarmIndex >= overdueActivities.size) {
-                                                currentAlarmIndex = 0
-                                            }
-                                        } else {
-                                            Log.d(TAG, "All ${overdueActivities.size} overdue tasks still active - alarms continue")
                                         }
                                     }
                                 }.onFailure { exception ->
@@ -381,7 +394,9 @@ class AlarmService : Service() {
         
         Log.d(TAG, "Updating overdue activities: ${overdueActivities.size} -> ${overdueTasks.size}")
         
-        overdueActivities = overdueTasks
+        synchronized(overdueActivitiesLock) {
+            overdueActivities = overdueTasks
+        }
         
         if (overdueTasks.isEmpty()) {
             // No more overdue tasks, stop alarms
@@ -443,27 +458,30 @@ class AlarmService : Service() {
     private fun checkAndUpdateOverdueTasks() {
         // Filter out only explicitly completed tasks
         // Don't filter by isOverdue flag as it might be stale - rely on fresh data from ActivitiesActivity
-        val beforeCount = overdueActivities.size
-        overdueActivities = overdueActivities.filter { activity ->
-            (activity.isCompleted != true && activity.isCompletedToday != true) &&
-            !activity.alarmAudioUrl.isNullOrEmpty()
-        }
-        
-        if (overdueActivities.isEmpty() && beforeCount > 0) {
-            Log.w(TAG, "All tasks completed, stopping alarms")
-            stopAlarms()
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                stopForeground(Service.STOP_FOREGROUND_REMOVE)
-            } else {
-                @Suppress("DEPRECATION")
-                stopForeground(true)
+        val beforeCount: Int
+        synchronized(overdueActivitiesLock) {
+            beforeCount = overdueActivities.size
+            overdueActivities = overdueActivities.filter { activity ->
+                (activity.isCompleted != true && activity.isCompletedToday != true) &&
+                !activity.alarmAudioUrl.isNullOrEmpty()
             }
-            stopSelf()
-            return
-        }
         
-        if (beforeCount != overdueActivities.size) {
-            Log.d(TAG, "Updated overdue count: $beforeCount -> ${overdueActivities.size}")
+            if (overdueActivities.isEmpty() && beforeCount > 0) {
+                Log.w(TAG, "All tasks completed, stopping alarms")
+                stopAlarms()
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    stopForeground(Service.STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
+                stopSelf()
+                return
+            }
+        
+            if (beforeCount != overdueActivities.size) {
+                Log.d(TAG, "Updated overdue count: $beforeCount -> ${overdueActivities.size}")
+            }
         }
         
         // Update notification
@@ -477,102 +495,118 @@ class AlarmService : Service() {
     }
     
     private fun playNextAlarm() {
-        // First check and update overdue tasks
-        checkAndUpdateOverdueTasks()
-        
-        if (overdueActivities.isEmpty()) {
-            return
-        }
-        
-        if (currentAlarmIndex >= overdueActivities.size) {
-            // Loop back to start
-            currentAlarmIndex = 0
-        }
-        
-        val activity = overdueActivities[currentAlarmIndex]
-        val alarmUrl = activity.alarmAudioUrl
-        
-        if (alarmUrl.isNullOrEmpty()) {
-            // Skip to next if no alarm URL
-            currentAlarmIndex++
-            playNextAlarm()
-            return
-        }
-        
-        // Double-check if task is still overdue (in case it was completed while we were playing)
-        if (activity.isCompleted == true || activity.isCompletedToday == true) {
-            // Task completed, remove from list and continue
-            checkAndUpdateOverdueTasks()
+        synchronized(overdueActivitiesLock) {
             if (overdueActivities.isEmpty()) {
+                // If list is empty after an alarm completes, stop the service.
+                Log.d(TAG, "No more overdue activities, stopping alarm service.")
+                stopAlarms()
+                stopSelf()
                 return
             }
+            
             if (currentAlarmIndex >= overdueActivities.size) {
+                // Loop back to start
                 currentAlarmIndex = 0
             }
-            playNextAlarm()
-            return
+            
+            val activity = overdueActivities[currentAlarmIndex]
+            val alarmUrl = activity.alarmAudioUrl
+            
+            if (alarmUrl.isNullOrEmpty() || activity.isCompleted == true || activity.isCompletedToday == true) {
+                // Skip to next if no alarm URL or if task was just completed
+                currentAlarmIndex++
+                playNextAlarm() // Recursively call to find the next valid alarm
+                return
+            }
         }
         
+        // Play the alarm (moved outside the synchronized block)
+        val activityToPlay = synchronized(overdueActivitiesLock) {
+            if (currentAlarmIndex < overdueActivities.size) {
+                overdueActivities[currentAlarmIndex]
+            } else {
+                null
+            }
+        }
+        activityToPlay?.let { playAlarmForActivity(it) }
+    }
+
+    private fun playAlarmForActivity(activity: Activity) {
+        // First, ensure any existing player is released.
+        releaseMediaPlayer()
+
         try {
-            releaseMediaPlayer()
-            
-            mediaPlayer = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED) // Enforce audibility
-                        .build()
-                )
-                
-                // Set volume to max
-                setVolume(1.0f, 1.0f)
-                
-                setDataSource(alarmUrl)
-                setOnPreparedListener { mp ->
-                    this@AlarmService.isPlaying = true
-                    // Ensure volume is max before playing
-                    mp.setVolume(1.0f, 1.0f)
+            synchronized(mediaPlayerLock) {
+                mediaPlayer = MediaPlayer().apply {
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED) // Enforce audibility
+                            .build()
+                    )
                     
-                    // CRITICAL: Ensure service stays in foreground before playing
-                    // This is essential for locked screen playback
-                    startForeground(NOTIFICATION_ID, createNotification(overdueActivities.size, activity))
-                    Log.d(TAG, "Foreground notification updated before playback")
+                    // Set volume to max
+                    setVolume(1.0f, 1.0f)
                     
-                    mp.start()
-                    Log.d(TAG, "Playing alarm for: ${activity.displayTitle} (URL: $alarmUrl)")
-                    Log.d(TAG, "Service is in foreground - should work with locked screen")
-                    
-                    // Update overlay with current index
-                    updateOverlayService(overdueActivities, currentAlarmIndex)
+                    setDataSource(activity.alarmAudioUrl)
+                    setOnPreparedListener { mp ->
+                        this@AlarmService.isPlaying = true
+                        // Ensure volume is max before playing
+                        mp.setVolume(1.0f, 1.0f)
+                        
+                        // CRITICAL: Call startForeground HERE for the first time.
+                        // This ensures the notification has the full-screen intent before the system sees it.
+                        startForeground(NOTIFICATION_ID, createNotification(overdueActivities.size, activity))
+                        isForegroundServiceStarted = true
+                        Log.d(TAG, "Service started in foreground with full-screen intent.")
+                        
+                        mp.start()
+                        Log.d(TAG, "Playing alarm for: ${activity.displayTitle} (URL: ${activity.alarmAudioUrl})")
+                        Log.d(TAG, "Service is in foreground - should work with locked screen")
+                        
+                        // Update overlay with current index
+                        updateOverlayService(overdueActivities, currentAlarmIndex)
+                    }
+                    setOnCompletionListener { mp ->
+                        this@AlarmService.isPlaying = false
+                        Log.d(TAG, "Alarm completed for: ${activity.displayTitle}")
+                        
+                        // Release the player and move to the next alarm.
+                        releaseMediaPlayer()
+                        synchronized(overdueActivitiesLock) {
+                            currentAlarmIndex++
+                        }
+                        playNextAlarm()
+                    }
+                    setOnErrorListener { mp, what, extra ->
+                        Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
+                        this@AlarmService.isPlaying = false
+                        
+                        // Release the player on error and move to the next alarm.
+                        releaseMediaPlayer()
+                        synchronized(overdueActivitiesLock) {
+                            this@AlarmService.currentAlarmIndex++
+                        }
+                        playNextAlarm()
+                        true
+                    }
+                    prepareAsync()
                 }
-                setOnCompletionListener { mp ->
-                    this@AlarmService.isPlaying = false
-                    Log.d(TAG, "Alarm completed for: ${activity.displayTitle}")
-                    // Check if task is still overdue before moving to next
-                    checkAndUpdateOverdueTasks()
-                    // Move to next alarm
-                    this@AlarmService.currentAlarmIndex++
-                    playNextAlarm()
-                }
-                setOnErrorListener { mp, what, extra ->
-                    Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
-                    this@AlarmService.isPlaying = false
-                    // Skip to next alarm on error
-                    this@AlarmService.currentAlarmIndex++
-                    playNextAlarm()
-                    true
-                }
-                prepareAsync()
             }
         } catch (e: IOException) {
             Log.e(TAG, "Error preparing media player: ${e.message}", e)
-            // Skip to next alarm on error
-            currentAlarmIndex++
+            releaseMediaPlayer()
+            synchronized(overdueActivitiesLock) {
+                currentAlarmIndex++
+            }
             playNextAlarm()
         } catch (e: Exception) {
             Log.e(TAG, "Error playing alarm: ${e.message}", e)
-            currentAlarmIndex++
+            releaseMediaPlayer()
+            synchronized(overdueActivitiesLock) {
+                currentAlarmIndex++
+            }
             playNextAlarm()
         }
     }
@@ -590,7 +624,9 @@ class AlarmService : Service() {
             checkOverdueJob = null
             
             // Clear overdue activities to indicate intentional stop
-            overdueActivities = emptyList()
+            synchronized(overdueActivitiesLock) {
+                overdueActivities = emptyList()
+            }
             currentAlarmIndex = 0
             
             // Hide overlay
@@ -653,17 +689,22 @@ class AlarmService : Service() {
     }
     
     private fun releaseMediaPlayer() {
-        try {
-            mediaPlayer?.apply {
-                if (isPlaying) {
-                    stop()
+        synchronized(mediaPlayerLock) {
+            try {
+                mediaPlayer?.apply {
+                    if (isPlaying) {
+                        stop()
+                    }
+                    // Resets the player to its uninitialized state.
+                    reset()
+                    // Releases all resources.
+                    release()
                 }
-                release()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error releasing media player: ${e.message}", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error releasing media player: ${e.message}", e)
+            mediaPlayer = null
         }
-        mediaPlayer = null
     }
     
     private fun createNotification(overdueCount: Int, currentActivity: Activity? = null): Notification {
@@ -674,7 +715,7 @@ class AlarmService : Service() {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        
+
         val title = if (currentActivity != null && isPlaying) {
             "🔔 Playing: ${currentActivity.displayTitle}"
         } else {
@@ -687,8 +728,8 @@ class AlarmService : Service() {
         } else {
             "Playing alarms for $overdueCount overdue task(s)"
         }
-        
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
@@ -702,7 +743,22 @@ class AlarmService : Service() {
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE) // Immediate foreground service
             .setShowWhen(true)
             .setAutoCancel(false) // Don't auto-cancel
-            .build()
+
+        // ONLY add the full-screen intent if we have a current activity to show
+        if (currentActivity != null) {
+            val fullScreenIntent = Intent(this, AlarmFullScreenActivity::class.java).apply {
+                putExtra(AlarmFullScreenActivity.EXTRA_ACTIVITY, com.google.gson.Gson().toJson(currentActivity))
+            }
+            val fullScreenPendingIntent = PendingIntent.getActivity(
+                this,
+                8, // Unique request code
+                fullScreenIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.setFullScreenIntent(fullScreenPendingIntent, true)
+        }
+        
+        return builder.build()
     }
     
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -712,30 +768,40 @@ class AlarmService : Service() {
         // DO NOT stop alarms - they should continue playing even if app is swiped
         // The service will continue running in the foreground
         // Only stop if overdueActivities is empty (intentional stop)
-        if (overdueActivities.isEmpty()) {
-            Log.w(TAG, "No overdue activities, stopping service")
-            try {
-                stopAlarms()
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                    stopForeground(Service.STOP_FOREGROUND_REMOVE)
-                } else {
-                    @Suppress("DEPRECATION")
-                    stopForeground(true)
+        synchronized(overdueActivitiesLock) {
+            if (overdueActivities.isEmpty()) {
+                Log.w(TAG, "No overdue activities, stopping service")
+                try {
+                    stopAlarms()
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                        stopForeground(Service.STOP_FOREGROUND_REMOVE)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
+                    }
+                    stopSelf()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error stopping service: ${e.message}", e)
                 }
-                stopSelf()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping service: ${e.message}", e)
+            } else {
+                Log.w(TAG, "Alarms continue playing (${overdueActivities.size} overdue tasks)")
+                // Ensure service stays in foreground even after task removal
+                // This is critical for background execution
+                try {
+                    startForeground(NOTIFICATION_ID, createNotification(overdueActivities.size))
+                    Log.w(TAG, "Service kept in foreground after task removal")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error keeping service in foreground: ${e.message}", e)
+                }
+                // Service continues running - alarms keep playing
             }
-        } else {
-            Log.w(TAG, "Alarms continue playing (${overdueActivities.size} overdue tasks)")
-            // Service continues running - alarms keep playing
         }
     }
     
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "AlarmService destroyed")
-        
+
         // Release wake lock
         releaseWakeLock()
         
@@ -757,34 +823,54 @@ class AlarmService : Service() {
         }
         
         try {
-            // Save state before stopping
-            val activitiesToRestore = overdueActivities.toList()
+            // Save state before stopping - check if we should restart
+            val activitiesToRestore = synchronized(overdueActivitiesLock) {
+                 overdueActivities.toList()
+            }
+            val wasPlaying = isPlaying
+            val shouldRestart = activitiesToRestore.isNotEmpty() && wasPlaying
+
             stopAlarms()
-            
-            // Only restart if service was unexpectedly killed (not intentionally stopped)
-            // Don't restart if overdueActivities is empty (was stopped intentionally)
-            if (activitiesToRestore.isNotEmpty() && overdueActivities.isEmpty()) {
+
+            // Only restart if service was unexpectedly killed while playing (not intentionally stopped)
+            if (shouldRestart) {
                 // Service was killed unexpectedly, restart it
-                Log.d(TAG, "Service killed unexpectedly, restarting with ${activitiesToRestore.size} activities")
-                try {
-                    val restartIntent = Intent(applicationContext, AlarmService::class.java).apply {
-                        action = ACTION_START_ALARM
-                        val activitiesJson = com.google.gson.Gson().toJson(activitiesToRestore)
-                        putExtra(EXTRA_OVERDUE_ACTIVITIES, activitiesJson)
-                    }
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        startForegroundService(restartIntent)
-                    } else {
-                        startService(restartIntent)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error restarting service: ${e.message}", e)
-                }
+                Log.w(TAG, "Service killed unexpectedly while playing, scheduling restart...")
+                scheduleAlarmServiceRestart(activitiesToRestore)
+                // Do not restart the app UI from here. The full-screen intent is the only mechanism that should open the UI.
             } else {
                 Log.d(TAG, "Service stopped intentionally or no activities to restore")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in onDestroy: ${e.message}", e)
+        }
+    }
+
+    private fun scheduleAlarmServiceRestart(activitiesToRestore: List<Activity>) {
+        try {
+            val restartIntent = Intent(applicationContext, AlarmService::class.java).apply {
+                action = ACTION_START_ALARM
+                val activitiesJson = com.google.gson.Gson().toJson(activitiesToRestore)
+                putExtra(EXTRA_OVERDUE_ACTIVITIES, activitiesJson)
+            }
+
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            val pendingIntent = PendingIntent.getService(
+                applicationContext,
+                1, // unique request code
+                restartIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val triggerTime = System.currentTimeMillis() + 2000
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+            } else {
+                @Suppress("DEPRECATION")
+                alarmManager.setExact(android.app.AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+            }
+            Log.w(TAG, "Scheduled AlarmService restart via AlarmManager")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error scheduling service restart: ${e.message}", e)
         }
     }
 }

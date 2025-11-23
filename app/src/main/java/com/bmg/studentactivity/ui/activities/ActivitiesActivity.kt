@@ -144,23 +144,12 @@ class ActivitiesActivity : AppCompatActivity() {
         super.onDestroy()
         stopAutoRefresh()
         
-        // Restart service if activity is destroyed (but not finishing normally)
+        // Only restart service if activity is destroyed (but not finishing normally)
+        // Don't restart activity itself to avoid loops - let KeepAliveService handle it
         if (!isFinishing) {
-            android.util.Log.d("ActivitiesActivity", "Activity destroyed but not finishing, restarting service")
+            android.util.Log.d("ActivitiesActivity", "Activity destroyed but not finishing, ensuring services are running")
             startKeepAliveService()
-            
-            // Schedule activity restart after a short delay
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                if (!isFinishing && !isDestroyed) {
-                    val restartIntent = Intent(this, ActivitiesActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                        addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    }
-                    startActivity(restartIntent)
-                    android.util.Log.d("ActivitiesActivity", "Restarted activity after destroy")
-                }
-            }, 1000) // 1 second delay
+            // Don't restart activity here - let KeepAliveService handle app restart if needed
         }
     }
     
